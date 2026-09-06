@@ -118,6 +118,28 @@ class HudView(context: Context, val game: Game, val sfx: Sfx) : View(context) {
 
     fun redraw() = postInvalidate()
 
+    // notebook paper overlay (blue rules + red margin + vignette), like the web version
+    var vignetteShaderW = 0; var vignetteShaderH = 0
+    val paperRule = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(60, 62, 82, 190); strokeWidth = 1.6f }
+    val paperMargin = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(80, 214, 69, 69); strokeWidth = 2.6f }
+    val vignettePaint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    fun drawPaperOverlay(canvas: Canvas, w: Float, h: Float) {
+        val gap = h * 0.05f
+        var y = gap
+        while (y < h) { canvas.drawLine(0f, y, w, y, paperRule); y += gap }
+        canvas.drawLine(w * 0.045f, 0f, w * 0.045f, h, paperMargin)
+        if (vignetteShaderW != width || vignetteShaderH != height) {
+            vignetteShaderW = width; vignetteShaderH = height
+            vignettePaint.shader = android.graphics.RadialGradient(
+                w / 2f, h * 0.45f, h * 0.8f,
+                intArrayOf(Color.TRANSPARENT, Color.argb(70, 110, 100, 70)),
+                floatArrayOf(0.55f, 1f), android.graphics.Shader.TileMode.CLAMP,
+            )
+        }
+        canvas.drawRect(0f, 0f, w, h, vignettePaint)
+    }
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val w = width.toFloat(); val h = height.toFloat()
@@ -186,6 +208,7 @@ class HudView(context: Context, val game: Game, val sfx: Sfx) : View(context) {
     }
 
     fun drawPlaying(canvas: Canvas, w: Float, h: Float) {
+        drawPaperOverlay(canvas, w, h)
         val g = game
         // score / wave
         textBig.textAlign = Paint.Align.LEFT
