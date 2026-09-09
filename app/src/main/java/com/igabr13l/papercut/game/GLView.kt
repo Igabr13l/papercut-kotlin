@@ -213,13 +213,15 @@ class GLView(context: Context, val game: Game, val onFrame: () -> Unit) :
         fun putSolidVert(x: Float, y: Float, z: Float, c: FloatArray) {
             if (sIdx + 7 > dynSolidFloats.size) return
             dynSolidFloats[sIdx++] = x; dynSolidFloats[sIdx++] = y; dynSolidFloats[sIdx++] = z
-            dynSolidFloats[sIdx++] = c[0]; dynSolidFloats[sIdx++] = c[1]; dynSolidFloats[sIdx++] = c[2]; dynSolidFloats[sIdx++] = c[3]
+            dynSolidFloats[sIdx++] = c[0]; dynSolidFloats[sIdx++] = c[1]; dynSolidFloats[sIdx++] = c[2]
+            dynSolidFloats[sIdx++] = if (c.size > 3) c[3] else 1f
         }
 
         fun putLineVert(x: Float, y: Float, z: Float, c: FloatArray) {
             if (lIdx + 7 > dynLineFloats.size) return
             dynLineFloats[lIdx++] = x; dynLineFloats[lIdx++] = y; dynLineFloats[lIdx++] = z
-            dynLineFloats[lIdx++] = c[0]; dynLineFloats[lIdx++] = c[1]; dynLineFloats[lIdx++] = c[2]; dynLineFloats[lIdx++] = c[3]
+            dynLineFloats[lIdx++] = c[0]; dynLineFloats[lIdx++] = c[1]; dynLineFloats[lIdx++] = c[2]
+            dynLineFloats[lIdx++] = if (c.size > 3) c[3] else 1f
         }
 
         fun addSolidBox(cx: Float, cy: Float, cz: Float, w: Float, h: Float, d: Float, c: FloatArray) {
@@ -287,15 +289,19 @@ class GLView(context: Context, val game: Game, val onFrame: () -> Unit) :
                 right.x * d.normal.y - right.y * d.normal.x
             ).norm()
 
+            val cx = d.pos.x + d.normal.x * 0.01f
+            val cy = d.pos.y + d.normal.y * 0.01f
+            val cz = d.pos.z + d.normal.z * 0.01f
+
             for (k in 0 until segs) {
                 val a0 = (k.toFloat() / segs) * 2f * Math.PI.toFloat()
                 val a1 = ((k + 1).toFloat() / segs) * 2f * Math.PI.toFloat()
                 val c0 = cos(a0) * r; val s0 = sin(a0) * r
                 val c1 = cos(a1) * r; val s1 = sin(a1) * r
 
-                putSolidVert(d.pos.x, d.pos.y, d.pos.z, d.color)
-                putSolidVert(d.pos.x + right.x * c0 + u.x * s0, d.pos.y + right.y * c0 + u.y * s0, d.pos.z + right.z * c0 + u.z * s0, d.color)
-                putSolidVert(d.pos.x + right.x * c1 + u.x * s1, d.pos.y + right.y * c1 + u.y * s1, d.pos.z + right.z * c1 + u.z * s1, d.color)
+                putSolidVert(cx, cy, cz, d.color)
+                putSolidVert(cx + right.x * c0 + u.x * s0, cy + right.y * c0 + u.y * s0, cz + right.z * c0 + u.z * s0, d.color)
+                putSolidVert(cx + right.x * c1 + u.x * s1, cy + right.y * c1 + u.y * s1, cz + right.z * c1 + u.z * s1, d.color)
             }
         }
 
@@ -412,13 +418,15 @@ class GLView(context: Context, val game: Game, val onFrame: () -> Unit) :
         fun putSolidVert(x: Float, y: Float, z: Float, c: FloatArray) {
             if (sIdx + 7 > dynSolidFloats.size) return
             dynSolidFloats[sIdx++] = x; dynSolidFloats[sIdx++] = y; dynSolidFloats[sIdx++] = z
-            dynSolidFloats[sIdx++] = c[0]; dynSolidFloats[sIdx++] = c[1]; dynSolidFloats[sIdx++] = c[2]; dynSolidFloats[sIdx++] = c[3]
+            dynSolidFloats[sIdx++] = c[0]; dynSolidFloats[sIdx++] = c[1]; dynSolidFloats[sIdx++] = c[2]
+            dynSolidFloats[sIdx++] = if (c.size > 3) c[3] else 1f
         }
 
         fun putLineVert(x: Float, y: Float, z: Float, c: FloatArray) {
             if (lIdx + 7 > dynLineFloats.size) return
             dynLineFloats[lIdx++] = x; dynLineFloats[lIdx++] = y; dynLineFloats[lIdx++] = z
-            dynLineFloats[lIdx++] = c[0]; dynLineFloats[lIdx++] = c[1]; dynLineFloats[lIdx++] = c[2]; dynLineFloats[lIdx++] = c[3]
+            dynLineFloats[lIdx++] = c[0]; dynLineFloats[lIdx++] = c[1]; dynLineFloats[lIdx++] = c[2]
+            dynLineFloats[lIdx++] = if (c.size > 3) c[3] else 1f
         }
 
         fun addVmBox(x: Float, y: Float, z: Float, w: Float, h: Float, d: Float, color: FloatArray = ColorPalette.shadeLight) {
@@ -638,12 +646,14 @@ class GLView(context: Context, val game: Game, val onFrame: () -> Unit) :
 
         fun putSolid(x: Float, y: Float, z: Float, c: FloatArray) {
             solidVerts.add(x); solidVerts.add(y); solidVerts.add(z)
-            solidVerts.add(c[0]); solidVerts.add(c[1]); solidVerts.add(c[2]); solidVerts.add(c[3])
+            solidVerts.add(c[0]); solidVerts.add(c[1]); solidVerts.add(c[2])
+            solidVerts.add(if (c.size > 3) c[3] else 1f)
         }
 
         fun putLine(x: Float, y: Float, z: Float, c: FloatArray) {
             lineVerts.add(x); lineVerts.add(y); lineVerts.add(z)
-            lineVerts.add(c[0]); lineVerts.add(c[1]); lineVerts.add(c[2]); lineVerts.add(c[3])
+            lineVerts.add(c[0]); lineVerts.add(c[1]); lineVerts.add(c[2])
+            lineVerts.add(if (c.size > 3) c[3] else 1f)
         }
 
         val scratch = FloatArray(4096)

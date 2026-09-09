@@ -85,4 +85,28 @@ class SketchTest {
             }
         }
     }
+
+    @Test
+    fun testColorDefinitionsHaveFourComponents() {
+        val colors = listOf(
+            "INK" to Sketch.INK,
+            "INK_DEEP" to Sketch.INK_DEEP,
+            "RED" to Sketch.RED,
+            "RED_BRIGHT" to Sketch.RED_BRIGHT,
+            "ORANGE" to Sketch.ORANGE,
+            "GREEN" to Sketch.GREEN,
+            "YELLOW" to Sketch.YELLOW,
+            "PAPER" to Sketch.PAPER,
+            "SHADE" to Sketch.SHADE,
+            "SHADE_LIGHT" to Sketch.SHADE_LIGHT
+        )
+
+        for ((name, color) in colors) {
+            assertEquals("Color $name must have 4 components (RGBA)", 4, color.size)
+            assertEquals("Color $name alpha must be 1.0f", 1f, color[3], 1e-4f)
+            for (i in 0..3) {
+                assertTrue("Component $i of $name must be in [0, 1]", color[i] in 0f..1f)
+            }
+        }
+    }
 }

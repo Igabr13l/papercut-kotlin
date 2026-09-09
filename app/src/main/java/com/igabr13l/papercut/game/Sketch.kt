@@ -6,16 +6,16 @@ import kotlin.math.sin
 
 // Doodle-style line generation, ported from the web sketch.ts helpers.
 object Sketch {
-    val INK = floatArrayOf(0.18f, 0.24f, 0.66f)
-    val INK_DEEP = floatArrayOf(0.125f, 0.17f, 0.49f)
-    val RED = floatArrayOf(0.78f, 0.16f, 0.24f)
-    val RED_BRIGHT = floatArrayOf(0.85f, 0.25f, 0.3f)
-    val ORANGE = floatArrayOf(0.85f, 0.49f, 0.06f)
-    val GREEN = floatArrayOf(0.24f, 0.54f, 0.29f)
-    val YELLOW = floatArrayOf(0.72f, 0.63f, 0.07f)
-    val PAPER = floatArrayOf(0.957f, 0.945f, 0.902f)
-    val SHADE = floatArrayOf(0.89f, 0.87f, 0.80f)
-    val SHADE_LIGHT = floatArrayOf(0.85f, 0.85f, 0.93f)
+    val INK = floatArrayOf(0.18f, 0.24f, 0.66f, 1f)
+    val INK_DEEP = floatArrayOf(0.125f, 0.17f, 0.49f, 1f)
+    val RED = floatArrayOf(0.78f, 0.16f, 0.24f, 1f)
+    val RED_BRIGHT = floatArrayOf(0.85f, 0.25f, 0.3f, 1f)
+    val ORANGE = floatArrayOf(0.85f, 0.49f, 0.06f, 1f)
+    val GREEN = floatArrayOf(0.24f, 0.54f, 0.29f, 1f)
+    val YELLOW = floatArrayOf(0.72f, 0.63f, 0.07f, 1f)
+    val PAPER = floatArrayOf(0.957f, 0.945f, 0.902f, 1f)
+    val SHADE = floatArrayOf(0.89f, 0.87f, 0.80f, 1f)
+    val SHADE_LIGHT = floatArrayOf(0.85f, 0.85f, 0.93f, 1f)
 
     fun rndJitter(a: Float) = (Math.random().toFloat() * 2f - 1f) * a
 
