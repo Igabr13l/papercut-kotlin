@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
+import android.graphics.Typeface
 import android.view.MotionEvent
 import android.view.View
 import kotlin.math.atan2
@@ -23,19 +24,28 @@ class HudView(context: Context, val game: Game, val sfx: Sfx) : View(context) {
     val orange = Color.argb(255, 217, 126, 16)
     val paper = Color.argb(255, 244, 241, 230)
 
-    val textBig = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ink; textSize = 34f; isFakeBoldText = true }
-    val textMid = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ink; textSize = 24f }
-    val textSmall = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ink; textSize = 18f }
-    val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ink; textSize = 110f; isFakeBoldText = true }
-    val barPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 4f; color = ink }
+    val doodleBold: Typeface = try { Typeface.create("casual", Typeface.BOLD) } catch (_: Throwable) { Typeface.DEFAULT_BOLD }
+    val doodleNormal: Typeface = try { Typeface.create("casual", Typeface.NORMAL) } catch (_: Throwable) { Typeface.DEFAULT }
+
+    val textBig = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ink; textSize = 34f; typeface = doodleBold }
+    val textMid = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ink; textSize = 24f; typeface = doodleNormal }
+    val textSmall = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ink; textSize = 18f; typeface = doodleNormal }
+    val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ink; textSize = 110f; typeface = doodleBold }
+    val barPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 3.5f; color = ink }
     val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     val btnFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL; color = Color.argb(140, 255, 255, 255) }
     val btnStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 3f; color = ink }
     val panelFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL; color = Color.argb(220, 250, 247, 238) }
     val vignette = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 90f; color = red }
 
+    val cornerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 2.8f; color = ink; strokeCap = Paint.Cap.ROUND }
+    val cornerPaintThin = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 1.4f; color = Color.argb(140, 46, 61, 168); strokeCap = Paint.Cap.ROUND }
+    val tallyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 2.4f; color = ink; strokeCap = Paint.Cap.ROUND }
+    val tallyCross = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 2.6f; color = ink; strokeCap = Paint.Cap.ROUND }
+    val hatchPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 2.5f; color = ink }
+
     var scaleF = 1f
-    var btnText = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ink; textAlign = Paint.Align.CENTER; textSize = 22f }
+    var btnText = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ink; textAlign = Paint.Align.CENTER; textSize = 22f; typeface = doodleBold }
 
     abstract class Btn(val label: String, val hold: Boolean) {
         val rect = RectF()
@@ -157,21 +167,119 @@ class HudView(context: Context, val game: Game, val sfx: Sfx) : View(context) {
         }
     }
 
+    fun drawCornerDoodles(canvas: Canvas, w: Float, h: Float) {
+        val s = 52f
+        // Top-Left
+        canvas.drawLine(14f, 14f + s, 16f, 16f, cornerPaint)
+        canvas.drawLine(16f, 16f, 14f + s, 14f, cornerPaint)
+        canvas.drawLine(20f, 18f + s * 0.72f, 22f, 22f, cornerPaintThin)
+        canvas.drawLine(22f, 22f, 18f + s * 0.72f, 20f, cornerPaintThin)
+
+        // Top-Right
+        canvas.drawLine(w - 14f, 14f + s, w - 16f, 16f, cornerPaint)
+        canvas.drawLine(w - 16f, 16f, w - 14f - s, 14f, cornerPaint)
+        canvas.drawLine(w - 20f, 18f + s * 0.72f, w - 22f, 22f, cornerPaintThin)
+        canvas.drawLine(w - 22f, 22f, w - 18f - s * 0.72f, 20f, cornerPaintThin)
+
+        // Bottom-Left
+        canvas.drawLine(14f, h - 14f - s, 16f, h - 16f, cornerPaint)
+        canvas.drawLine(16f, h - 16f, 14f + s, h - 14f, cornerPaint)
+        canvas.drawLine(20f, h - 18f - s * 0.72f, 22f, h - 22f, cornerPaintThin)
+        canvas.drawLine(22f, h - 22f, 18f + s * 0.72f, h - 20f, cornerPaintThin)
+
+        // Bottom-Right
+        canvas.drawLine(w - 14f, h - 14f - s, w - 16f, h - 16f, cornerPaint)
+        canvas.drawLine(w - 16f, h - 16f, w - 14f - s, h - 14f, cornerPaint)
+        canvas.drawLine(w - 20f, h - 18f - s * 0.72f, w - 22f, h - 22f, cornerPaintThin)
+        canvas.drawLine(w - 22f, h - 22f, w - 18f - s * 0.72f, h - 20f, cornerPaintThin)
+    }
+
+    fun drawTally(canvas: Canvas, x: Float, y: Float, n: Int) {
+        val maxGroups = minOf(6, (n + 4) / 5)
+        val groupW = 22f
+        val tallyH = 16f
+        for (g in 0 until maxGroups) {
+            val count = minOf(5, n - g * 5)
+            val gx = x + g * (groupW + 10f)
+            for (i in 0 until minOf(4, count)) {
+                val lx = gx + i * (groupW / 4f)
+                canvas.drawLine(lx, y, lx + 0.5f, y + tallyH, tallyPaint)
+            }
+            if (count == 5) {
+                canvas.drawLine(gx - 2f, y + tallyH - 2f, gx + groupW - 1f, y + 2f, tallyCross)
+            }
+        }
+        if (n > 30) {
+            canvas.drawText("+${n - 30}", x + maxGroups * (groupW + 10f), y + tallyH - 2f, textSmall)
+        }
+    }
+
     fun drawBtn(canvas: Canvas, b: Btn, color: Int = ink, active: Boolean = false) {
-        canvas.drawRoundRect(b.rect, 16f, 16f, btnFill)
-        if (active) { fillPaint.color = Color.argb(70, 46, 61, 168); canvas.drawRoundRect(b.rect, 16f, 16f, fillPaint) }
-        btnStroke.color = color
-        canvas.drawRoundRect(b.rect, 16f, 16f, btnStroke)
-        btnText.color = color
-        val tp = b.rect.centerY() + btnText.textSize * 0.35f
-        canvas.drawText(b.label, b.rect.centerX(), tp, btnText)
+        val isFire = b === fireBtn
+        val isAction = b === jumpBtn || b === aimBtn || b === grappleBtn || b === reloadBtn || b === dashBtn
+        val isWeapon = weaponBtns.contains(b)
+
+        if (isFire) {
+            val cx = b.rect.centerX()
+            val cy = b.rect.centerY()
+            val r = b.rect.width() / 2f
+            fillPaint.color = if (active) Color.argb(90, 200, 40, 60) else Color.argb(45, 200, 40, 60)
+            canvas.drawCircle(cx, cy, r, fillPaint)
+            btnStroke.color = red
+            btnStroke.strokeWidth = 4f
+            canvas.drawCircle(cx, cy, r, btnStroke)
+            btnText.color = red
+            btnText.textSize = 24f * scaleF
+            val tp = cy + btnText.textSize * 0.35f
+            canvas.drawText(b.label, cx, tp, btnText)
+        } else if (isAction) {
+            val cx = b.rect.centerX()
+            val cy = b.rect.centerY()
+            val r = b.rect.width() / 2f
+            canvas.drawCircle(cx, cy, r, btnFill)
+            if (active) {
+                fillPaint.color = Color.argb(80, 46, 61, 168)
+                canvas.drawCircle(cx, cy, r, fillPaint)
+            }
+            btnStroke.color = color
+            btnStroke.strokeWidth = 3f
+            canvas.drawCircle(cx, cy, r, btnStroke)
+            btnText.color = color
+            btnText.textSize = 17f * scaleF
+            val tp = cy + btnText.textSize * 0.35f
+            canvas.drawText(b.label, cx, tp, btnText)
+        } else {
+            // Weapon tabs or menu buttons (rounded doodle pills)
+            canvas.drawRoundRect(b.rect, 20f, 20f, btnFill)
+            if (active) {
+                fillPaint.color = Color.argb(70, 46, 61, 168)
+                canvas.drawRoundRect(b.rect, 20f, 20f, fillPaint)
+            }
+            btnStroke.color = color
+            btnStroke.strokeWidth = 3f
+            canvas.drawRoundRect(b.rect, 20f, 20f, btnStroke)
+            btnText.color = color
+            btnText.textSize = if (isWeapon) 16f * scaleF else 22f * scaleF
+            val tp = b.rect.centerY() + btnText.textSize * 0.35f
+            canvas.drawText(b.label, b.rect.centerX(), tp, btnText)
+        }
     }
 
     fun drawMenu(canvas: Canvas, w: Float, h: Float) {
         canvas.drawRect(0f, 0f, w, h, panelFill.apply { alpha = 200 })
+        drawCornerDoodles(canvas, w, h)
         titlePaint.textAlign = Paint.Align.CENTER
         titlePaint.color = ink
         canvas.drawText("PAPERCUT", w / 2f, h * 0.26f, titlePaint)
+        // Wavy scribble underline under title
+        val uw = 280f
+        var ux = w / 2f - uw / 2f
+        val uy = h * 0.275f
+        while (ux < w / 2f + uw / 2f) {
+            canvas.drawLine(ux, uy, ux + 10f, uy - 3f, btnStroke)
+            canvas.drawLine(ux + 10f, uy - 3f, ux + 20f, uy, btnStroke)
+            ux += 20f
+        }
         textMid.textAlign = Paint.Align.CENTER
         canvas.drawText("shooter de oleadas a boli · arena de obra en cuaderno rayado", w / 2f, h * 0.33f, textMid)
         textSmall.textAlign = Paint.Align.CENTER
@@ -188,15 +296,16 @@ class HudView(context: Context, val game: Game, val sfx: Sfx) : View(context) {
 
     fun drawPanelOverlay(canvas: Canvas, w: Float, h: Float) {
         canvas.drawRect(0f, 0f, w, h, panelFill.apply { alpha = 190 })
+        drawCornerDoodles(canvas, w, h)
         titlePaint.textAlign = Paint.Align.CENTER
         canvas.drawText("PAUSA", w / 2f, h * 0.4f, titlePaint)
         drawBtn(canvas, resumeBtn)
         drawBtn(canvas, restartBtn, red)
-        // reposition restart label when paused (rect shared with gameover)
     }
 
     fun drawOver(canvas: Canvas, w: Float, h: Float) {
         canvas.drawRect(0f, 0f, w, h, panelFill.apply { alpha = 220 })
+        drawCornerDoodles(canvas, w, h)
         titlePaint.textAlign = Paint.Align.CENTER
         titlePaint.color = red
         canvas.drawText("TE BORRARON DE LA PÁGINA", w / 2f, h * 0.3f, titlePaint.apply { textSize = 64f })
@@ -209,6 +318,7 @@ class HudView(context: Context, val game: Game, val sfx: Sfx) : View(context) {
 
     fun drawPlaying(canvas: Canvas, w: Float, h: Float) {
         drawPaperOverlay(canvas, w, h)
+        drawCornerDoodles(canvas, w, h)
         val g = game
         // score / wave
         textBig.textAlign = Paint.Align.LEFT
@@ -292,22 +402,38 @@ class HudView(context: Context, val game: Game, val sfx: Sfx) : View(context) {
         }
 
         // hp + ammo (bottom-left)
-        val hpW = 220f
-        val hpX = 24f; val hpY = h - 90f
+        val hpW = 200f
+        val hpX = 24f; val hpY = h - 96f
         textSmall.textAlign = Paint.Align.LEFT
         canvas.drawText("HP", hpX, hpY + 14f, textSmall)
-        canvas.drawRoundRect(RectF(hpX + 36f, hpY, hpX + 36f + hpW, hpY + 16f), 8f, 8f, btnFill)
-        fillPaint.color = if (g.player.hp > 30) ink else red
-        canvas.drawRoundRect(RectF(hpX + 36f, hpY, hpX + 36f + hpW * (g.player.hp / 100f).coerceIn(0f, 1f), hpY + 16f), 8f, 8f, fillPaint)
-        canvas.drawRoundRect(RectF(hpX + 36f, hpY, hpX + 36f + hpW, hpY + 16f), 8f, 8f, barPaint)
-        textBig.textSize = 40f
+        val barRect = RectF(hpX + 36f, hpY, hpX + 36f + hpW, hpY + 16f)
+        canvas.drawRoundRect(barRect, 8f, 8f, btnFill)
+        val fillW = hpW * (g.player.hp / 100f).coerceIn(0f, 1f)
+        if (fillW > 0f) {
+            canvas.save()
+            canvas.clipRect(hpX + 36f, hpY, hpX + 36f + fillW, hpY + 16f)
+            hatchPaint.color = if (g.player.hp > 30) ink else red
+            var hx = hpX + 36f - 16f
+            while (hx < hpX + 36f + fillW + 16f) {
+                canvas.drawLine(hx, hpY + 16f, hx + 16f, hpY, hatchPaint)
+                hx += 8f
+            }
+            canvas.restore()
+        }
+        canvas.drawRoundRect(barRect, 8f, 8f, barPaint)
+
+        // Ammo + Tally marks
+        textBig.textSize = 38f
         val wst = g.weapons[g.wIdx]
-        if (g.wIdx == 4) canvas.drawText("∞", hpX + 40f, hpY + 60f, textBig)
-        else canvas.drawText("${wst.mag}/${wst.reserve}", hpX + 40f, hpY + 60f, textBig)
+        if (g.wIdx == 4) canvas.drawText("∞", hpX + 40f, hpY + 54f, textBig)
+        else {
+            canvas.drawText("${wst.mag}/${wst.reserve}", hpX + 40f, hpY + 54f, textBig)
+            drawTally(canvas, hpX + 40f, hpY + 62f, wst.mag)
+        }
         textBig.textSize = 34f
         if (g.wIdx != 4 && wst.mag == 0) {
             textSmall.color = red
-            canvas.drawText("REC — reload!", hpX + 40f, hpY + 84f, textSmall)
+            canvas.drawText("REC — reload!", hpX + 40f, hpY + 98f, textSmall)
             textSmall.color = ink
         }
 
@@ -363,8 +489,7 @@ class HudView(context: Context, val game: Game, val sfx: Sfx) : View(context) {
                     val id = e.getPointerId(i)
                     if (id == joyId) updateJoy(e.getX(i), e.getY(i))
                     else if (id == lookId) {
-                        game.input.lookDX += e.getX(i) - lookX
-                        game.input.lookDY += e.getY(i) - lookY
+                        game.input.addLook(e.getX(i) - lookX, e.getY(i) - lookY)
                         lookX = e.getX(i); lookY = e.getY(i)
                     }
                 }

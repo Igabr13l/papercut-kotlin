@@ -97,6 +97,13 @@ class SoftView(context: Context, val game: Game, val onFrame: () -> Unit) :
             )
             boxesTmp.add(BoxFaces(corners, faces, normals, centers, shades))
         }
+        // crane cables & hook
+        segs.add(32f); segs.add(23f); segs.add(-32f); segs.add(13f); segs.add(19.8f); segs.add(-32f)
+        segs.add(32f); segs.add(23f); segs.add(-32f); segs.add(41f); segs.add(19.8f); segs.add(-32f)
+        segs.add(14f); segs.add(19f); segs.add(-32f); segs.add(14f); segs.add(12.5f); segs.add(-32f)
+        val hook = Sketch.cross(14f, 12.2f, -32f, 0.5f)
+        for (f in hook) segs.add(f)
+
         worldLines = segs.toFloatArray()
         worldLineCount = worldLines.size / 3
         boxes = boxesTmp
@@ -328,28 +335,77 @@ class SoftView(context: Context, val game: Game, val onFrame: () -> Unit) :
         linePaint.color = Color.rgb(217, 126, 16)
         if (np > 0) drawBatch(canvas, vpM, arr, np / 3, linePaint, W, H)
 
-        // enemies
-        np = 0
-        for (e in game.enemies) {
-            np = Sketch.stickman(e.pos.x, e.pos.y, e.pos.z, e.scale, e.facing, e.state, e.walkPhase, e.deadT, if (e.phase > 4.5f) 1f else -1f, arr, np)
+        // pickups
+        var hpNp = 0
+        for (p in game.pickups) {
+            if (p.kind == 0) {
+                hpNp = Sketch.boxEdges(p.obj.x, p.obj.y, p.obj.z, 0.5f, 0.16f, 0.16f, arr, hpNp)
+                hpNp = Sketch.boxEdges(p.obj.x, p.obj.y, p.obj.z, 0.16f, 0.5f, 0.16f, arr, hpNp)
+            }
         }
-        if (np > 0) {
+        if (hpNp > 0) {
+            linePaint.color = Color.rgb(61, 138, 75)
+            linePaint.strokeWidth = lw * 1.1f
+            drawBatch(canvas, vpM, arr, hpNp / 3, linePaint, W, H)
+        }
+        var ammoNp = 0
+        for (p in game.pickups) {
+            if (p.kind == 1) {
+                ammoNp = Sketch.boxEdges(p.obj.x, p.obj.y, p.obj.z, 0.45f, 0.3f, 0.3f, arr, ammoNp)
+            }
+        }
+        if (ammoNp > 0) {
+            linePaint.color = Color.rgb(217, 160, 20)
+            linePaint.strokeWidth = lw * 1.1f
+            drawBatch(canvas, vpM, arr, ammoNp / 3, linePaint, W, H)
+        }
+
+        // enemies (red for grunts/boss, deep ink for shooters)
+        var redNp = 0
+        for (e in game.enemies) {
+            if (e.kind != 1) {
+                redNp = Sketch.stickman(e.pos.x, e.pos.y, e.pos.z, e.scale, e.facing, e.state, e.walkPhase, e.deadT, if (e.phase > 4.5f) 1f else -1f, arr, redNp)
+            }
+        }
+        if (redNp > 0) {
             linePaint.color = Color.argb(255, 200, 40, 60)
             linePaint.strokeWidth = lw * 1.3f
-            drawBatch(canvas, vpM, arr, np / 3, linePaint, W, H)
-            var fp = 0
-            val flashArr = FloatArray(np)
-            for (e in game.enemies) {
-                if (e.dead() || e.flash <= 0.05f) continue
-                fp = Sketch.stickman(e.pos.x, e.pos.y, e.pos.z, e.scale, e.facing, e.state, e.walkPhase, e.deadT, 1f, flashArr, fp)
-            }
-            if (fp > 0) {
-                linePaint.color = Color.argb((game.enemies.maxOf { it.flash } * 255).toInt().coerceIn(0, 255), 255, 255, 255)
-                linePaint.strokeWidth = lw * 1.7f
-                drawBatch(canvas, vpM, flashArr, fp / 3, linePaint, W, H)
+            drawBatch(canvas, vpM, arr, redNp / 3, linePaint, W, H)
+        }
+        var blueNp = 0
+        for (e in game.enemies) {
+            if (e.kind == 1) {
+                blueNp = Sketch.stickman(e.pos.x, e.pos.y, e.pos.z, e.scale, e.facing, e.state, e.walkPhase, e.deadT, if (e.phase > 4.5f) 1f else -1f, arr, blueNp)
             }
         }
+        if (blueNp > 0) {
+            linePaint.color = Color.argb(255, 32, 43, 125)
+            linePaint.strokeWidth = lw * 1.3f
+            drawBatch(canvas, vpM, arr, blueNp / 3, linePaint, W, H)
+        }
+        var fp = 0
+        for (e in game.enemies) {
+            if (e.dead() || e.flash <= 0.05f) continue
+            fp = Sketch.stickman(e.pos.x, e.pos.y, e.pos.z, e.scale, e.facing, e.state, e.walkPhase, e.deadT, 1f, arr, fp)
+        }
+        if (fp > 0) {
+            linePaint.color = Color.argb((game.enemies.maxOf { it.flash } * 255).toInt().coerceIn(0, 255), 255, 255, 255)
+            linePaint.strokeWidth = lw * 1.7f
+            drawBatch(canvas, vpM, arr, fp / 3, linePaint, W, H)
+        }
         linePaint.strokeWidth = lw
+
+        // tracers
+        if (game.tracers.isNotEmpty()) {
+            val ts = FloatArray(4)
+            for (tr in game.tracers) {
+                if (segToScreen(vpM, tr.from.x, tr.from.y, tr.from.z, tr.to.x, tr.to.y, tr.to.z, ts, W, H)) {
+                    linePaint.color = tr.color
+                    linePaint.strokeWidth = lw * 1.1f
+                    canvas.drawLine(ts[0], ts[1], ts[2], ts[3], linePaint)
+                }
+            }
+        }
 
         // rope
         game.grapplePoint?.let { gp ->

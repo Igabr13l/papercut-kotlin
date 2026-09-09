@@ -36,6 +36,9 @@ class Barrel(val pos: Vec3, var hp: Float, var alive: Boolean)
 
 class FloatText(val pos: Vec3, val text: String, val color: Int, var born: Float)
 class FeedItem(val text: String, val color: Int, var born: Float)
+class Tracer(val from: Vec3, val to: Vec3, var life: Float, val color: Int)
+
+class Decal(val pos: Vec3, val normal: Vec3, val color: FloatArray, val size: Float)
 
 class WeaponDef(
     val name: String, val mag: Int, val reserve: Int, val cd: Float, val dmg: Float,
@@ -60,7 +63,23 @@ class Input {
     var firePressed = false
     var jumpQ = false; var dashQ = false; var grappleQ = false; var reloadQ = false
     var swapQ = -1
-    fun clearPerFrame() { lookDX = 0f; lookDY = 0f; firePressed = false; jumpQ = false; dashQ = false; grappleQ = false; reloadQ = false; swapQ = -1 }
+
+    @Synchronized fun addLook(dx: Float, dy: Float) {
+        lookDX += dx
+        lookDY += dy
+    }
+    @Synchronized fun consumeLookX(): Float = lookDX.also { lookDX = 0f }
+    @Synchronized fun consumeLookY(): Float = lookDY.also { lookDY = 0f }
+    @Synchronized fun consumeFirePressed(): Boolean = firePressed.also { firePressed = false }
+    @Synchronized fun consumeJump(): Boolean = jumpQ.also { jumpQ = false }
+    @Synchronized fun consumeDash(): Boolean = dashQ.also { dashQ = false }
+    @Synchronized fun consumeGrapple(): Boolean = grappleQ.also { grappleQ = false }
+    @Synchronized fun consumeReload(): Boolean = reloadQ.also { reloadQ = false }
+    @Synchronized fun consumeSwap(): Int = swapQ.also { swapQ = -1 }
+    @Synchronized fun clearPerFrame() {
+        lookDX = 0f; lookDY = 0f; firePressed = false
+        jumpQ = false; dashQ = false; grappleQ = false; reloadQ = false; swapQ = -1
+    }
 }
 
 class WeaponState(def: WeaponDef) {
@@ -85,6 +104,14 @@ class Game {
     val parts = ArrayList<Particle>()
     val pickups = ArrayList<Pickup>()
     val barrels = ArrayList<Barrel>()
+    val tracers = ArrayList<Tracer>()
+    val decals = ArrayList<Decal>()
+    var onHaptic: ((durationMs: Long, amplitude: Int) -> Unit)? = null
+    fun haptic(ms: Long, amp: Int = 120) { onHaptic?.invoke(ms, amp) }
+    fun addDecal(point: Vec3, normal: Vec3, color: FloatArray, size: Float) {
+        if (decals.size > 46) decals.removeAt(0)
+        decals.add(Decal(point.copy().addScaled(normal, 0.02f), normal.copy(), color, size))
+    }
     var barrelSpots = listOf(floatArrayOf(-4f, 2f), floatArrayOf(14f, 8f), floatArrayOf(-18f, -6f), floatArrayOf(26f, -14f), floatArrayOf(6f, -10f), floatArrayOf(-28f, 12f))
 
     val player = PlayerState()
@@ -168,6 +195,16 @@ class Game {
         for (pz in -16..16 step 8) addBox(40f, 4f, pz.toFloat(), 0.8f, 8f, 0.8f)
         // bridge A floor2 -> tower
         addBox(-8f, 8f, -20f, 14f, 0.4f, 3f)
+        // bridge railings
+        addBox(21f, 8.6f, -5.4f, 34f, 0.7f, 0.12f, false)
+        addBox(21f, 8.6f, -2.6f, 34f, 0.7f, 0.12f, false)
+        addBox(-8f, 8.6f, -21.4f, 14f, 0.7f, 0.12f, false)
+        addBox(-8f, 8.6f, -18.6f, 14f, 0.7f, 0.12f, false)
+        // crane
+        addBox(32f, 10f, -32f, 1.8f, 20f, 1.8f)
+        addBox(24f, 19.6f, -32f, 26f, 1f, 1.3f, false)
+        addBox(38f, 19.6f, -32f, 9f, 1f, 1.3f, false)
+        addBox(32f, 21.6f, -32f, 0.7f, 3f, 0.7f, false)
         // cover blocks
         addBox(-6f, 1.1f, 6f, 6f, 0.7f, 0.7f)
         addBox(8f, 1.1f, -2f, 0.7f, 0.7f, 6f)
@@ -196,7 +233,7 @@ class Game {
     fun restart() { reset(); phase = 1 }
 
     fun reset() {
-        enemies.clear(); projs.clear(); parts.clear(); pickups.clear()
+        enemies.clear(); projs.clear(); parts.clear(); pickups.clear(); tracers.clear(); decals.clear()
         resetBarrels()
         player.pos.set(0f, 0f, 26f); player.vel.set(0f, 0f, 0f); player.yaw = 0f; player.pitch = 0f; player.hp = 100f
         for (w in weapons) { w.mag = w.def.mag; w.reserve = w.def.reserve; w.cdT = 0f; w.reloadT = 0f }
@@ -214,6 +251,7 @@ class Game {
         if (n < 0 || n > 4 || n == wIdx) return
         wIdx = n
         weapons[n].reloadT = 0f
+        sfx?.click()
     }
 
     fun startReload() {
@@ -365,6 +403,7 @@ class Game {
         hits++
         sfx?.hit()
         burst(point, Sketch.RED, if (head) 7 else 4, 0.14f, 5f)
+        if (head) addDecal(point, aimDir(0f).scale(-1f), Sketch.RED, 0.22f)
         if (e.hp <= 0) killEnemy(e, if (head) { tags.add("HEADSHOT"); tags } else tags, tags.contains("SLICED"))
     }
 
@@ -392,12 +431,14 @@ class Game {
             parts.add(Particle(p.copy().add(Vec3(0f, 1.2f * e.scale, 0f)), v, 1.3f, 1.3f, 16f, 0.13f * e.scale, Sketch.SHADE_LIGHT))
         }
         burst(p.copy().add(Vec3(0f, 0.05f, 0f)), Sketch.RED, 8, 0.5f * e.scale, 2f)
+        addDecal(p.copy().add(Vec3(0f, 0.02f, 0f)), Vec3(0f, 1f, 0f), Sketch.RED, 0.7f * e.scale)
         sfx?.splat()
         e.state = 6; e.deadT = 0f
         if (e.kind == 2) {
             boss = null
             banner("THE DOODLER ERASED", "+1500 · the page is quiet... for now")
             shake = min(1f, shake + 0.7f)
+            sfx?.explode()
         } else if (Random.nextFloat() < 0.2f) dropPickup(p)
     }
 
@@ -417,19 +458,26 @@ class Game {
         val w = weapons[wIdx]
         w.mag--; w.cdT = w.def.cd
         kick = 1f
+        haptic(25, 120)
         sfx?.shot(wIdx)
         shake = min(1f, shake + (if (wIdx == 1) 0.35f else if (wIdx == 3) 0.4f else 0.12f))
         shots++
         val zoom = wIdx == 3 && input.aim
         val spread = w.def.spread * (if (zoom) 0.1f else if (input.aim) 0.6f else 1f) + (if (player.grounded) 0f else 0.02f) + player.vel.len() * 0.0015f
+        val o = eyePos()
         for (i in 0 until maxOf(1, w.def.pellets)) {
             val dir = aimDir(spread)
             val hit = hitscan(dir)
+            val end = hit?.point ?: o.copy().addScaled(dir, 120f)
+            tracers.add(Tracer(o.copy().addScaled(dir, 0.4f), end, 0.07f, if (wIdx == 4) 0xFFD9404D.toInt() else 0xFFE04050.toInt()))
             if (hit == null) continue
             when (hit.kind) {
                 0 -> damageEnemy(hit.enemy!!, w.def.dmg, hit.head, hit.point, ArrayList())
                 1 -> { hit.barrel!!.hp -= w.def.dmg; if (hit.barrel.hp <= 0) explodeBarrel(hit.barrel) }
-                else -> burst(hit.point, Sketch.INK_DEEP, 2, 0.07f, 3f)
+                else -> {
+                    burst(hit.point, Sketch.INK_DEEP, 2, 0.07f, 3f)
+                    addDecal(hit.point, hit.normal, Sketch.INK, 0.18f)
+                }
             }
         }
     }
@@ -438,7 +486,9 @@ class Game {
         val w = weapons[4]
         w.cdT = if (dash) 0.3f else w.def.cd
         slashT = 0.2f
-        if (dash) shake = min(1f, shake + 0.2f)
+        sfx?.slash()
+        haptic(40, 160)
+        if (dash) { sfx?.dash(); shake = min(1f, shake + 0.2f) }
         val fwd = aimDir(0f)
         val origin = eyePos()
         for (e in enemies) {
@@ -486,6 +536,7 @@ class Game {
         if (src != null) floatText(src.copy(), "$label -$d", 0xFFC8283C.toInt())
         player.hp -= d
         sfx?.hurt()
+        haptic(80, 220)
         hitFlash = 1f
         shake = min(1f, shake + 0.35f)
         if (player.hp <= 0) {
@@ -512,13 +563,16 @@ class Game {
         if (be != null) {
             be.state = 5; be.t = 0f
             sfx?.grapple()
+            sfx?.yank()
+            haptic(35, 140)
             floatText(be.pos.copy().add(Vec3(0f, 2f, 0f)), "YANK!", 0xFF3D8A4B.toInt())
             return
         }
         val hit = hitscan(dir, 48f)
         if (hit != null && hit.kind == 2) {
             grapplePoint = hit.point
-        }
+            sfx?.grapple()
+        } else sfx?.empty()
     }
 
     fun spawnProj(from: Vec3, dir: Vec3, speed: Float, dmg: Float, owner: Enemy?, color: FloatArray = Sketch.SHADE_LIGHT) {
@@ -544,7 +598,7 @@ class Game {
         val e = Enemy(scale, hp, hp, kind)
         e.pos = p
         enemies.add(e)
-        if (kind == 2) { boss = e; banner("THE DOODLER", "block boss — block his ink, slice his scribbles") }
+        if (kind == 2) { boss = e; sfx?.boss(); banner("THE DOODLER", "block boss — block his ink, slice his scribbles") }
         return e
     }
 
@@ -585,15 +639,18 @@ class Game {
     /* ---------------- update ---------------- */
     fun update(dt: Float) {
         val P = player
-        val w = weapons[wIdx]
-        w.cdT -= dt; grappleCd -= dt; slashCd -= dt; slashT -= dt
+        grappleCd = maxOf(0f, grappleCd - dt)
+        slashCd = maxOf(0f, slashCd - dt)
+        slashT = maxOf(0f, slashT - dt)
         hitFlash = maxOf(0f, hitFlash - dt * 2.2f)
         shake = maxOf(0f, shake - dt * 2.6f)
         kick = maxOf(0f, kick - dt * 7f)
         for (ww in weapons) {
-            if (ww.reloadT > 0) {
+            if (ww.cdT > 0f) ww.cdT = maxOf(0f, ww.cdT - dt)
+            if (ww.reloadT > 0f) {
                 ww.reloadT -= dt
-                if (ww.reloadT <= 0) {
+                if (ww.reloadT <= 0f) {
+                    ww.reloadT = 0f
                     val need = ww.def.mag - ww.mag
                     val take = minOf(need, ww.reserve)
                     ww.mag += take; ww.reserve -= take
@@ -601,8 +658,13 @@ class Game {
             }
         }
         // look input
-        P.yaw -= input.lookDX * 0.0032f
-        P.pitch = (P.pitch - input.lookDY * 0.0032f).coerceIn(-1.5f, 1.5f)
+        P.yaw -= input.consumeLookX() * 0.0032f
+        P.pitch = (P.pitch - input.consumeLookY() * 0.0032f).coerceIn(-1.5f, 1.5f)
+
+        val swap = input.consumeSwap()
+        if (swap >= 0) switchWeapon(swap)
+
+        val w = weapons[wIdx]
 
         val zooming = wIdx == 3 && input.aim
         val blocking = wIdx == 4 && input.aim
@@ -624,13 +686,13 @@ class Game {
         P.vel.x += (wish.x * speed - P.vel.x) * min(1f, accel * dt * 0.16f)
         P.vel.z += (wish.z * speed - P.vel.z) * min(1f, accel * dt * 0.16f)
         P.vel.y -= 22f * dt
-        if (input.jumpQ && (P.grounded || P.coyote > 0)) {
+        if (input.consumeJump() && (P.grounded || P.coyote > 0)) {
             P.vel.y = 8.8f; P.grounded = false; P.coyote = 0f
             sfx?.jump()
             grapplePoint = null
         }
         // dash slash
-        if (input.dashQ && wIdx == 4 && slashCd <= 0f) {
+        if (input.consumeDash() && wIdx == 4 && slashCd <= 0f) {
             slashCd = 3f
             dashT = 0.24f
             dashDir.set(fwd)
@@ -643,12 +705,12 @@ class Game {
             P.vel.y = maxOf(P.vel.y, 0f)
         }
         // grapple: tap hooks, tap again releases
-        if (input.grappleQ) {
+        if (input.consumeGrapple()) {
             if (grapplePoint != null) grapplePoint = null
             else tryGrapple()
         }
-        if (input.reloadQ) startReload()
-        if (input.swapQ >= 0) switchWeapon(input.swapQ)
+        if (input.consumeReload()) startReload()
+
         // grapple pull
         val gp = grapplePoint
         if (gp != null) {
@@ -671,18 +733,24 @@ class Game {
         val wasGrounded = P.grounded
         P.grounded = moveEntity(P.pos, P.vel, 0.45f, 1.7f, dt, 0.55f)
         if (P.grounded) P.coyote = 0.12f else P.coyote -= dt
+        if (!wasGrounded && P.grounded && P.vel.y == 0f) {
+            sfx?.land()
+            burst(P.pos.copy().add(Vec3(0f, 0.1f, 0f)), Sketch.SHADE_LIGHT, 4, 0.1f, 2f)
+        }
         if (P.pos.y < -8) { P.pos.set(0f, 2f, 26f); P.vel.set(0f, 0f, 0f); damagePlayer(15, P.pos.copy(), "FALL") }
         bobT += dt * (if (P.grounded) P.vel.len() * 1.4f else 0f)
+
         // firing
-        val trigger = input.fire && (w.def.auto || input.firePressed)
+        val firePressed = input.consumeFirePressed()
+        val trigger = input.fire && (w.def.auto || firePressed)
         if (wIdx == 4) {
             if (trigger && w.cdT <= 0 && dashT <= 0f) slash(false)
         } else if (trigger && w.cdT <= 0 && w.reloadT <= 0) {
             if (w.mag > 0) fire()
-            else { w.cdT = 0.3f; if (input.firePressed) startReload() }
+            else { w.cdT = 0.3f; sfx?.empty(); if (firePressed) startReload() }
         }
-        input.clearPerFrame()
 
+        tracers.removeAll { it.life -= dt; it.life <= 0f }
         updateEnemies(dt)
         updateProjs(dt, blocking)
         updateParts(dt)
@@ -705,6 +773,7 @@ class Game {
             val pos = e.pos
             if (e.state == 6) {
                 e.deadT += dt
+                if (e.deadT > 0.7f) e.pos.y = maxOf(-2f, e.pos.y - dt * 1.6f)
                 if (e.deadT > 1.5f) it.remove()
                 continue
             }
@@ -726,7 +795,7 @@ class Game {
                     if (d < 1.6f) {
                         damageEnemy(e, 30f, false, pos.copy().add(Vec3(0f, 1.2f * e.scale, 0f)), arrayListOf("YANKED"))
                         if (!e.dead()) { e.state = 4; e.t = 1.1f; e.yankTimer = 2.5f }
-                        shake = min(1f, shake + 0.2f)
+                        sfx?.yank(); shake = min(1f, shake + 0.2f)
                     }
                 }
                 4 -> {
@@ -785,8 +854,8 @@ class Game {
             if (e.state != 5) e.grounded = moveEntity(pos, e.vel, 0.4f * e.scale, 1.8f * e.scale, dt, 0.5f * e.scale)
             else pos.addScaled(e.vel, dt)
             if (pos.y < -7) {
-                if (e.yankTimer > 0) damageEnemy(e, 9999f, false, pos.copy(), arrayListOf("YANKED"))
-                else killEnemy(e, ArrayList(), false)
+                val tags: MutableList<String> = if (e.yankTimer > 0) arrayListOf("YANKED") else ArrayList()
+                killEnemy(e, tags, false)
             }
         }
     }
@@ -813,6 +882,7 @@ class Game {
                 spawnProj(from, d.norm(), 24f, 12f, e, Sketch.RED)
             }
         }
+        sfx?.shot(1)
     }
 
     fun rotateY(v: Vec3, ang: Float) {
@@ -898,10 +968,15 @@ class Game {
         while (it.hasNext()) {
             val p = it.next()
             p.t += dt
+            p.obj.y += kotlin.math.sin(p.t * 3f) * dt * 0.4f
             if (p.obj.distTo(player.pos.copy().add(Vec3(0f, 1f, 0f))) < 1.5f) {
-                if (p.kind == 0) { player.hp = min(100f, player.hp + 30f); sfx?.pickup(); floatText(p.obj.copy(), "+30 HP", 0xFF3D8A4B.toInt()) }
-                else {
+                if (p.kind == 0) {
+                    player.hp = min(100f, player.hp + 30f)
+                    sfx?.pickup()
+                    floatText(p.obj.copy(), "+30 HP", 0xFF3D8A4B.toInt())
+                } else {
                     weapons[0].reserve += 90; weapons[1].reserve += 24; weapons[2].reserve += 30; weapons[3].reserve += 15
+                    sfx?.pickup()
                     floatText(p.obj.copy(), "AMMO REFILL", 0xFFB8A013.toInt())
                 }
                 it.remove()

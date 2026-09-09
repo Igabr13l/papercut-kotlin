@@ -105,79 +105,229 @@ object Sketch {
         return p
     }
 
+    // Arc segment pairs
+    fun arcPairs(r: Float, a0: Float, a1: Float, segs: Int = 5, ox: Float = 0f, oy: Float = 0f, oz: Float = 0f): FloatArray {
+        val pts = ArrayList<Float>(segs * 6)
+        var px = cos(a0) * r + ox; var py = sin(a0) * r + oy
+        for (i in 1..segs) {
+            val a = a0 + ((a1 - a0) * i) / segs
+            val nx = cos(a) * r + ox; val ny = sin(a) * r + oy
+            pts.add(px); pts.add(py); pts.add(oz)
+            pts.add(nx); pts.add(ny); pts.add(oz)
+            px = nx; py = ny
+        }
+        return pts.toFloatArray()
+    }
+
+    // Helper to transform local (lx, ly, lz) to world with scaling, dead tilt, facing, and translation
+    private inline fun transformPoint(
+        lx: Float, ly: Float, lz: Float, s: Float,
+        facing: Float, tilt: Float, px: Float, py: Float, pz: Float,
+        out: (Float, Float, Float) -> Unit
+    ) {
+        val sx = lx * s; val sy = ly * s; val sz = lz * s
+        // Tilt around Z if dead
+        val tx = if (tilt != 0f) sx * cos(tilt) - sy * sin(tilt) else sx
+        val ty = if (tilt != 0f) sx * sin(tilt) + sy * cos(tilt) else sy
+        val tz = sz
+        // Rotate around Y by facing (facing = 0 faces +Z)
+        val sinF = sin(facing); val cosF = cos(facing)
+        val wx = tx * cosF + tz * sinF
+        val wy = ty
+        val wz = -tx * sinF + tz * cosF
+        out(px + wx, py + wy, pz + wz)
+    }
+
     // Stickman pose as line segments (world-space, feet at (px,py,pz), scale s).
     // state: 0 idle, 1 walk, 2 windup, 3 shoot, 4 stun, 5 yank, 6 dead
     fun stickman(px: Float, py: Float, pz: Float, s: Float, facing: Float, state: Int, phase: Float, deadT: Float, deadDir: Float, arr: FloatArray, pos: Int): Int {
         var p = pos
+        val tilt = if (state == 6) kotlin.math.min(1.5f, deadT * 3f) * deadDir else 0f
+
         fun seg(ax: Float, ay: Float, az: Float, bx: Float, by: Float, bz: Float) {
-            arr[p++] = px + ax; arr[p++] = py + ay; arr[p++] = pz + az
-            arr[p++] = px + bx; arr[p++] = py + by; arr[p++] = pz + bz
+            transformPoint(ax, ay, az, s, facing, tilt, px, py, pz) { x, y, z ->
+                arr[p++] = x; arr[p++] = y; arr[p++] = z
+            }
+            transformPoint(bx, by, bz, s, facing, tilt, px, py, pz) { x, y, z ->
+                arr[p++] = x; arr[p++] = y; arr[p++] = z
+            }
         }
-        // local: x = right of enemy, z = forward (towards facing dir handled by caller rotation? we fake with facing cos/sin)
-        val fx = sin(facing); val fz = cos(facing) // forward
-        val rx = fz; val rz = -fx                  // right
-        fun L(l: Float, r: Float, h: Float): FloatArray {
-            // local (l = right offset, h = up) -> world
-            return floatArrayOf(l * rx + h * 0f, h, l * rz + 0f).let { it }
-        }
-        val walk = if (state == 1) sin(phase * 9f) else if (state == 5) sin(phase * 14f) else 0f
-        val bob = if (state == 1) kotlin.math.abs(sin(phase * 9f)) * 0.06f else 0f
-        val hipY = 0.55f * s
-        val shY = 1.3f * s + bob * s
-        val legSwing = walk * 0.35f * s
-        // legs (world-space forward offset)
-        fun leg(hipR: Float, swing: Float) {
-            val hx = hipR * rx; val hz = hipR * rz
-            val kx = hx + swing * s * fx * 0.5f; val kz = hz + swing * s * fz * 0.5f
-            val fx2 = hx + swing * s * fx; val fz2 = hz + swing * s * fz
-            arr[p++] = px + hx; arr[p++] = py + hipY; arr[p++] = pz + hz
-            arr[p++] = px + kx; arr[p++] = py + hipY * 0.5f; arr[p++] = pz + kz
-            arr[p++] = px + kx; arr[p++] = py + hipY * 0.5f; arr[p++] = pz + kz
-            arr[p++] = px + fx2; arr[p++] = py; arr[p++] = pz + fz2
-        }
-        leg(0.16f * s, legSwing)
-        leg(-0.16f * s, -legSwing)
-        // spine
-        seg(0f, hipY + bob * s, 0f, 0f, shY, 0f)
-        // head (as 2 crossed arcs: use small octagon via 4 segs)
-        val hy = 1.55f * s + bob * s
-        val hr = 0.28f * s
-        var a0 = 0f
-        while (a0 < 2f * PI.toFloat() - 0.01f) {
-            val a1 = a0 + (2f * PI.toFloat()) / 7f
-            seg(cos(a0) * hr, hy + sin(a0) * hr, 0f, cos(a1) * hr, hy + sin(a1) * hr, 0f)
-            a0 = a1
-        }
-        // arms
-        val armR = 0.35f * s
+
+        val walk = if (state == 1) sin(phase * 9f) else if (state == 5) sin(phase * 17f) else 0f
+        val cosW = if (state == 1) cos(phase * 9f) else 0f
+        val lean = if (state == 1) 0.07f else if (state == 2) -0.16f else if (state == 3) 0.3f else 0f
+        val neck = floatArrayOf(lean, 1.38f, 0f)
+        val hip = floatArrayOf(lean * 0.5f, 0.95f, 0f)
+
+        // 0. Torso
+        seg(neck[0], neck[1], neck[2], hip[0], hip[1], hip[2])
+
+        val sh = floatArrayOf(lean * 0.9f, 1.3f, 0f)
+
+        // 1-4. Arms and Legs according to web stickman rig
         when (state) {
-            2 -> { // windup: both arms up forward
-                seg(0.1f * s, shY, 0f, armR * 0.6f * fx + 0.1f * s * rx, shY + 0.5f * s, armR * 0.6f * fz + 0.1f * s * rz)
-                seg(-0.1f * s, shY, 0f, 0.2f * s * fx - 0.1f * s * rx, shY + 0.45f * s, 0.2f * s * fz - 0.1f * s * rz)
+            1 -> { // walk
+                seg(sh[0], sh[1], sh[2], -walk * 0.2f + lean, 1.05f, 0.08f)
+                seg(-walk * 0.2f + lean, 1.05f, 0.08f, -walk * 0.4f + lean, 0.82f, 0.18f)
+                seg(sh[0], sh[1], sh[2], walk * 0.2f + lean, 1.05f, 0.08f)
+                seg(walk * 0.2f + lean, 1.05f, 0.08f, walk * 0.4f + lean, 0.82f, 0.18f)
+                seg(hip[0], hip[1], hip[2], cosW * 0.28f + lean * 0.5f, 0.5f, 0.06f)
+                seg(cosW * 0.28f + lean * 0.5f, 0.5f, 0.06f, cosW * 0.5f + lean * 0.5f, 0.05f + maxOf(0f, -walk) * 0.2f, 0f)
+                seg(hip[0], hip[1], hip[2], -cosW * 0.28f + lean * 0.5f, 0.5f, 0.06f)
+                seg(-cosW * 0.28f + lean * 0.5f, 0.5f, 0.06f, -cosW * 0.5f + lean * 0.5f, 0.05f + maxOf(0f, walk) * 0.2f, 0f)
             }
-            3 -> { // shoot: one arm forward
-                seg(0.1f * s, shY, 0f, 0.55f * s * fx + 0.1f * s * rx, shY, 0.55f * s * fz + 0.1f * s * rz)
-                seg(-0.1f * s, shY, 0f, -0.15f * s * rx, shY - 0.35f * s, -0.15f * s * rz)
+            2 -> { // windup
+                seg(sh[0], sh[1], sh[2], -0.22f, 1.28f, -0.22f)
+                seg(-0.22f, 1.28f, -0.22f, -0.28f, 1.5f, -0.4f)
+                seg(sh[0], sh[1], sh[2], 0.22f, 1.28f, -0.22f)
+                seg(0.22f, 1.28f, -0.22f, 0.28f, 1.5f, -0.4f)
+                seg(hip[0], hip[1], hip[2], -0.2f, 0.5f, -0.05f)
+                seg(-0.2f, 0.5f, -0.05f, -0.3f, 0.03f, -0.12f)
+                seg(hip[0], hip[1], hip[2], 0.2f, 0.5f, 0.05f)
+                seg(0.2f, 0.5f, 0.05f, 0.3f, 0.03f, 0.12f)
             }
-            else -> {
-                val sw = walk * 0.3f * s
-                seg(0.12f * s, shY, 0f, (0.12f * s) * rx - sw * fx, shY - 0.55f * s, (0.12f * s) * rz - sw * fz)
-                seg(-0.12f * s, shY, 0f, (-0.12f * s) * rx + sw * fx, shY - 0.55f * s, (-0.12f * s) * rz + sw * fz)
+            3 -> { // attack / shoot
+                val f = 0.55f
+                seg(sh[0], sh[1], sh[2], -0.16f, 1.18f, 0.22f)
+                seg(-0.16f, 1.18f, 0.22f, -0.18f, 1.05f, f * 0.7f)
+                seg(sh[0], sh[1], sh[2], 0.16f, 1.2f, 0.26f)
+                seg(0.16f, 1.2f, 0.26f, 0.18f, 1.12f, f)
+                seg(hip[0], hip[1], hip[2], -0.22f, 0.5f, 0.1f)
+                seg(-0.22f, 0.5f, 0.1f, -0.32f, 0.03f, 0.2f)
+                seg(hip[0], hip[1], hip[2], 0.24f, 0.5f, -0.08f)
+                seg(0.24f, 0.5f, -0.08f, 0.36f, 0.03f, -0.16f)
+            }
+            5 -> { // yank / stun
+                val sPhase = sin(phase * 17f)
+                val cPhase = cos(phase * 17f)
+                seg(sh[0], sh[1], sh[2], -0.3f, 1.4f + sPhase * 0.12f, -0.05f)
+                seg(-0.3f, 1.4f + sPhase * 0.12f, -0.05f, -0.46f, 1.66f + cPhase * 0.14f, 0.02f)
+                seg(sh[0], sh[1], sh[2], 0.3f, 1.4f + cPhase * 0.12f, -0.05f)
+                seg(0.3f, 1.4f + cPhase * 0.12f, -0.05f, 0.46f, 1.66f + sPhase * 0.14f, 0.02f)
+                seg(hip[0], hip[1], hip[2], -0.24f, 0.52f, 0f)
+                seg(-0.24f, 0.52f, 0f, -0.34f, 0.06f, 0.06f)
+                seg(hip[0], hip[1], hip[2], 0.24f, 0.52f, 0f)
+                seg(0.24f, 0.52f, 0f, 0.34f, 0.06f, -0.06f)
+            }
+            6 -> { // dead
+                seg(sh[0], sh[1], sh[2], -0.3f, 1.1f, 0.1f)
+                seg(-0.3f, 1.1f, 0.1f, -0.5f, 0.9f, 0.2f)
+                seg(sh[0], sh[1], sh[2], 0.3f, 1.1f, 0.1f)
+                seg(0.3f, 1.1f, 0.1f, 0.5f, 0.9f, 0.2f)
+                seg(hip[0], hip[1], hip[2], -0.2f, 0.5f, 0.1f)
+                seg(-0.2f, 0.5f, 0.1f, -0.3f, 0.05f, 0.3f)
+                seg(hip[0], hip[1], hip[2], 0.2f, 0.5f, 0.1f)
+                seg(0.2f, 0.5f, 0.1f, 0.3f, 0.05f, 0.3f)
+            }
+            else -> { // idle
+                val b = sin(phase * 3.5f) * 0.03f
+                seg(sh[0], sh[1], sh[2], -0.16f, 1.05f + b, 0.06f)
+                seg(-0.16f, 1.05f + b, 0.06f, -0.2f, 0.82f + b, 0.14f)
+                seg(sh[0], sh[1], sh[2], 0.16f, 1.05f - b, 0.06f)
+                seg(0.16f, 1.05f - b, 0.06f, 0.2f, 0.82f - b, 0.14f)
+                seg(hip[0], hip[1], hip[2], -0.14f, 0.5f, 0.02f)
+                seg(-0.14f, 0.5f, 0.02f, -0.2f, 0.03f, 0f)
+                seg(hip[0], hip[1], hip[2], 0.14f, 0.5f, 0.02f)
+                seg(0.14f, 0.5f, 0.02f, 0.2f, 0.03f, 0f)
             }
         }
-        // dead: tilt lines (approximate by skewing x/z with deadT handled by caller sinking)
-        if (state == 6) {
-            val tilt = kotlin.math.min(1.5f, deadT * 3f) * deadDir
-            val c = cos(tilt); val si = sin(tilt)
-            // rewrite: rotate all appended points around feet pivot
-            var q = pos
-            while (q < p) {
-                val wx = arr[q] - px; val wy = arr[q + 1] - py
-                arr[q] = px + wx * c + wy * si
-                arr[q + 1] = py + wy * c - wx * si
-                q += 3
+
+        // Belly outline (circle in XY at y=1.02, z=0.03)
+        val bellyR = 0.44f
+        val bsegs = 12
+        var ba0 = 0f
+        for (i in 0 until bsegs) {
+            val ba1 = ((i + 1).toFloat() / bsegs) * 2f * PI.toFloat()
+            seg(cos(ba0) * bellyR, 1.02f + sin(ba0) * bellyR, 0.03f, cos(ba1) * bellyR, 1.02f + sin(ba1) * bellyR, 0.03f)
+            ba0 = ba1
+        }
+
+        // Head position (y=1.62)
+        val headY = 1.62f
+        val headR = 0.27f
+        val hsegs = 10
+        var ha0 = 0f
+        // 1. Head circle XY
+        for (i in 0 until hsegs) {
+            val ha1 = ((i + 1).toFloat() / hsegs) * 2f * PI.toFloat()
+            seg(cos(ha0) * headR, headY + sin(ha0) * headR, 0f, cos(ha1) * headR, headY + sin(ha1) * headR, 0f)
+            ha0 = ha1
+        }
+        // 2. Head circle ZY (giving 3D sphere volume)
+        ha0 = 0f
+        for (i in 0 until hsegs) {
+            val ha1 = ((i + 1).toFloat() / hsegs) * 2f * PI.toFloat()
+            seg(0f, headY + sin(ha0) * headR, cos(ha0) * headR, 0f, headY + sin(ha1) * headR, cos(ha1) * headR)
+            ha0 = ha1
+        }
+
+        // 3. Eyes (two small circles at -0.09 and +0.09)
+        val eyeR = 0.04f
+        for (side in floatArrayOf(-0.09f, 0.09f)) {
+            var ea0 = 0f
+            for (i in 0 until 5) {
+                val ea1 = ((i + 1).toFloat() / 5) * 2f * PI.toFloat()
+                seg(side + cos(ea0) * eyeR, headY + 0.06f + sin(ea0) * eyeR, 0.16f, side + cos(ea1) * eyeR, headY + 0.06f + sin(ea1) * eyeR, 0.16f)
+                ea0 = ea1
             }
         }
+
+        // 4. Mouth (arc at y=-0.08 relative to head)
+        var ma0 = PI.toFloat() * 1.15f
+        val maEnd = PI.toFloat() * 1.85f
+        val mouthR = 0.11f
+        for (i in 0 until 4) {
+            val ma1 = ma0 + (maEnd - PI.toFloat() * 1.15f) / 4f
+            seg(cos(ma0) * mouthR, headY - 0.08f + sin(ma0) * mouthR, 0.16f, cos(ma1) * mouthR, headY - 0.08f + sin(ma1) * mouthR, 0.16f)
+            ma0 = ma1
+        }
+
+        // 5. Eyebrows (jittered expressive segments)
+        seg(-0.16f, headY + 0.16f, 0.16f, -0.04f, headY + 0.12f, 0.16f)
+        seg(0.04f, headY + 0.12f, 0.16f, 0.16f, headY + 0.16f, 0.16f)
+
         return p
+    }
+
+    // Generate solid paper-white fan triangles for belly and head
+    fun stickmanFills(
+        px: Float, py: Float, pz: Float, s: Float, facing: Float, state: Int, deadT: Float, deadDir: Float,
+        putVertex: (Float, Float, Float) -> Unit
+    ) {
+        val tilt = if (state == 6) kotlin.math.min(1.5f, deadT * 3f) * deadDir else 0f
+
+        // Belly fan (y=1.02, z=0.02, r=0.44)
+        val bellyR = 0.44f
+        val bsegs = 12
+        var cx = 0f; var cy = 0f; var cz = 0f
+        transformPoint(0f, 1.02f, 0.02f, s, facing, tilt, px, py, pz) { x, y, z -> cx = x; cy = y; cz = z }
+
+        for (k in 0 until bsegs) {
+            val a0 = (k.toFloat() / bsegs) * 2f * PI.toFloat()
+            val a1 = ((k + 1).toFloat() / bsegs) * 2f * PI.toFloat()
+            var x0 = 0f; var y0 = 0f; var z0 = 0f
+            var x1 = 0f; var y1 = 0f; var z1 = 0f
+            transformPoint(cos(a0) * bellyR, 1.02f + sin(a0) * bellyR, 0.02f, s, facing, tilt, px, py, pz) { x, y, z -> x0 = x; y0 = y; z0 = z }
+            transformPoint(cos(a1) * bellyR, 1.02f + sin(a1) * bellyR, 0.02f, s, facing, tilt, px, py, pz) { x, y, z -> x1 = x; y1 = y; z1 = z }
+            putVertex(cx, cy, cz)
+            putVertex(x0, y0, z0)
+            putVertex(x1, y1, z1)
+        }
+
+        // Head fan (y=1.62, z=-0.02, r=0.25)
+        val headR = 0.25f
+        val hsegs = 10
+        transformPoint(0f, 1.62f, -0.02f, s, facing, tilt, px, py, pz) { x, y, z -> cx = x; cy = y; cz = z }
+        for (k in 0 until hsegs) {
+            val a0 = (k.toFloat() / hsegs) * 2f * PI.toFloat()
+            val a1 = ((k + 1).toFloat() / hsegs) * 2f * PI.toFloat()
+            var x0 = 0f; var y0 = 0f; var z0 = 0f
+            var x1 = 0f; var y1 = 0f; var z1 = 0f
+            transformPoint(cos(a0) * headR, 1.62f + sin(a0) * headR, -0.02f, s, facing, tilt, px, py, pz) { x, y, z -> x0 = x; y0 = y; z0 = z }
+            transformPoint(cos(a1) * headR, 1.62f + sin(a1) * headR, -0.02f, s, facing, tilt, px, py, pz) { x, y, z -> x1 = x; y1 = y; z1 = z }
+            putVertex(cx, cy, cz)
+            putVertex(x0, y0, z0)
+            putVertex(x1, y1, z1)
+        }
     }
 }

@@ -1,19 +1,23 @@
 package com.igabr13l.papercut
 
 import android.app.Activity
+import android.content.Context
+import android.os.Build
 import android.os.Bundle
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
+import com.igabr13l.papercut.game.GLView
 import com.igabr13l.papercut.game.Game
 import com.igabr13l.papercut.game.HudView
 import com.igabr13l.papercut.game.Sfx
-import com.igabr13l.papercut.game.SoftView
 
 class MainActivity : Activity() {
     lateinit var game: Game
-    lateinit var softView: SoftView
+    lateinit var glView: GLView
     lateinit var hud: HudView
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -24,8 +28,20 @@ class MainActivity : Activity() {
         game = Game()
         game.sfx = sfx
 
-        val view = SoftView(this, game) { hud.redraw() }
-        softView = view
+        val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        game.onHaptic = { ms, amp ->
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    vibrator?.vibrate(VibrationEffect.createOneShot(ms, amp.coerceIn(1, 255)))
+                } else {
+                    @Suppress("DEPRECATION")
+                    vibrator?.vibrate(ms)
+                }
+            } catch (_: Throwable) {}
+        }
+
+        val view = GLView(this, game) { hud.redraw() }
+        glView = view
         val hudView = HudView(this, game, sfx)
         hud = hudView
 
@@ -37,11 +53,13 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        glView.onResume()
         hideBars()
     }
 
     override fun onPause() {
         game.pause()
+        glView.onPause()
         super.onPause()
     }
 

@@ -18,6 +18,14 @@ class Vec3(var x: Float = 0f, var y: Float = 0f, var z: Float = 0f) {
     fun dot(o: Vec3): Float = x * o.x + y * o.y + z * o.z
     fun cross(o: Vec3): Vec3 = Vec3(y * o.z - z * o.y, z * o.x - x * o.z, x * o.y - y * o.x)
     fun distTo(o: Vec3): Float = kotlin.math.sqrt((x - o.x) * (x - o.x) + (y - o.y) * (y - o.y) + (z - o.z) * (z - o.z))
+    fun approxEquals(o: Vec3, eps: Float = 1e-4f): Boolean =
+        kotlin.math.abs(x - o.x) < eps && kotlin.math.abs(y - o.y) < eps && kotlin.math.abs(z - o.z) < eps
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is Vec3) return false
+        return x == other.x && y == other.y && z == other.z
+    }
+    override fun hashCode(): Int = 31 * (31 * x.hashCode() + y.hashCode()) + z.hashCode()
     override fun toString() = "($x,$y,$z)"
 }
 
@@ -55,9 +63,9 @@ object Mat4 {
         val cy = cos(yaw); val sy = sin(yaw)
         val cp = cos(pitch); val sp = sin(pitch)
         // R = Rx(-pitch) * Ry(-yaw)
-        val m00 = cy; val m01 = 0f; val m02 = sy
-        val m10 = sy * sp; val m11 = cp; val m12 = -sy * cp
-        val m20 = -cy * sp; val m21 = sp; val m22 = cy * cp
+        val m00 = cy; val m01 = 0f; val m02 = -sy
+        val m10 = sp * sy; val m11 = cp; val m12 = sp * cy
+        val m20 = cp * sy; val m21 = -sp; val m22 = cp * cy
         java.util.Arrays.fill(out, 0f)
         out[0] = m00; out[4] = m01; out[8] = m02
         out[1] = m10; out[5] = m11; out[9] = m12

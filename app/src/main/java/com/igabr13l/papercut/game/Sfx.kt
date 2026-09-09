@@ -55,6 +55,11 @@ class Sfx {
             "pickup" -> tone(120) { t, d -> sin(TAU * (700f + 300f * t / d) * t) * env(t, d) * 0.45f }
             "reload" -> tone(90) { t, d -> (Random.nextFloat() * 2f - 1f) * env(t * 3f, d) * 0.4f }
             "empty" -> tone(50) { t, d -> sin(TAU * 300f * t) * env(t, d) * 0.4f }
+            "revolver" -> tone(120) { t, d -> (Random.nextFloat() * 2f - 1f) * env(t, d) * 0.8f + sin(TAU * 140f * t) * env(t, d) * 0.4f }
+            "dash" -> tone(200) { t, d -> (Random.nextFloat() * 2f - 1f) * env(t, d) * 0.6f + sin(TAU * (300f + 600f * t / d) * t) * env(t, d) * 0.35f }
+            "yank" -> tone(220) { t, d -> sin(TAU * (1200f - 1000f * t / d) * t) * env(t, d) * 0.6f }
+            "boss" -> tone(700) { t, d -> (Random.nextFloat() * 2f - 1f) * env(t * 0.8f, d) * 0.5f + sin(TAU * (90f - 50f * t / d) * t) * env(t * 0.7f, d) * 0.7f }
+            "land" -> tone(80) { t, d -> (Random.nextFloat() * 2f - 1f) * env(t * 2.5f, d) * 0.4f + sin(TAU * 60f * t) * env(t * 2.5f, d) * 0.3f }
             else -> ShortArray(1)
         }
     }
@@ -62,7 +67,7 @@ class Sfx {
     var lastPlay = 0L
     fun play(name: String, vol: Float = 0.55f) {
         val now = System.currentTimeMillis()
-        val minGap = if (name == "hit" || name == "shot") 40L else 60L
+        val minGap = if (name == "hit" || name == "shot" || name == "revolver" || name == "land") 35L else 60L
         if (now - lastPlay < minGap && name != "explode" && name != "over") return
         lastPlay = now
         val data = sound(name)
@@ -79,7 +84,7 @@ class Sfx {
     }
 
     fun click() = play("click", 0.35f)
-    fun shot(wIdx: Int) = play(when (wIdx) { 1 -> "shotgun"; 3 -> "sniper"; 4 -> "slash"; else -> "shot" })
+    fun shot(wIdx: Int) = play(when (wIdx) { 1 -> "shotgun"; 2 -> "revolver"; 3 -> "sniper"; 4 -> "slash"; else -> "shot" })
     fun hit() = play("hit", 0.4f)
     fun splat() = play("splat", 0.6f)
     fun hurt() = play("hurt", 0.6f)
@@ -92,4 +97,9 @@ class Sfx {
     fun pickup() = play("pickup", 0.45f)
     fun reload() = play("reload", 0.4f)
     fun empty() = play("empty", 0.35f)
+    fun dash() = play("dash", 0.5f)
+    fun slash() = play("slash", 0.5f)
+    fun yank() = play("yank", 0.45f)
+    fun boss() = play("boss", 0.65f)
+    fun land() = play("land", 0.35f)
 }
